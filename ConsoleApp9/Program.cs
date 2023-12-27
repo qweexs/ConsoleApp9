@@ -1,8 +1,6 @@
-﻿using MySql.Data.MySqlClient;
+using MySql.Data.MySqlClient;
 using System;
-using System.Data.SqlClient;
 using System.Net.Http;
-using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
 using Telegram.Bot.Args;
@@ -14,35 +12,29 @@ namespace ConsoleApp9
     {
         private static ITelegramBotClient botClient;
         private static MySqlConnection _connection = new MySqlConnection("server=localhost;port=3306;username=root;password=;" +
-           "database=Бот");
+           "database=Проверка");
 
-        static void Main()
+        static async Task Main()
         {
-            string botToken = "6917692549:AAFa0LUb62V0yKN5V7uX6f-LnSENQvKdyRc";
+            string botToken = "6578935983:AAGO555UWlMT9dZPju25dAApoCU3_ZCg528";
 
             botClient = new TelegramBotClient(botToken);
-            var me = botClient.GetMeAsync().Result;
+            var me = await botClient.GetMeAsync();
 
             Console.Title = me.Username;
 
             botClient.OnMessage += Bot_OnMessage;
 
-            // Запускаем отдельный поток для проверки сообщений каждую секунду
-            Thread messageCheckThread = new Thread(MessageCheckThread);
-            messageCheckThread.Start();
-
-            // Запускаем отдельный поток для вывода количества записей в базе каждый час
-            Thread databaseCountThread = new Thread(DatabaseCountThread);
-            databaseCountThread.Start();
-
-            botClient.StartReceiving();
-            Console.WriteLine($"Бот {me.Username} запущен. Нажмите [Enter], чтобы завершить.");
-            Console.ReadLine();
+            // Запускаем асинхронные методы
+            await Task.WhenAll(
+                MessageCheckThreadAsync(),
+                DatabaseCountThreadAsync()
+            );
 
             botClient.StopReceiving();
         }
 
-        private static void Bot_OnMessage(object sender, MessageEventArgs e)
+        private static async void Bot_OnMessage(object sender, MessageEventArgs e)
         {
             if (e.Message.Text != null && e.Message.Chat.Type == ChatType.Group)
             {
@@ -55,9 +47,9 @@ namespace ConsoleApp9
                     InsertMessage(e.Message);
 
                     // Отправляем ответное сообщение в группу
-                    botClient.SendTextMessageAsync(
+                    await botClient.SendTextMessageAsync(
                         chatId: e.Message.Chat,
-                        text: $"Запись добавлена в базу данных. Всего записей: {GetDatabaseCount()}"
+                        text: $"Запись добавлена в базу данных. Всего записей: {await GetDatabaseCountAsync()}"
                     );
                 }
             }
@@ -104,12 +96,12 @@ namespace ConsoleApp9
             }
         }
 
-        private static async void MessageCheckThread()
+        private static async Task MessageCheckThreadAsync()
         {
             while (true)
             {
                 await CheckForNewMessagesAsync();
-                await Task.Delay(1000);
+                await Task.Delay(1500);
             }
         }
 
@@ -138,33 +130,33 @@ namespace ConsoleApp9
             }
         }
 
-        private static async void DatabaseCountThread()
+        private static async Task DatabaseCountThreadAsync()
         {
             while (true)
             {
                 // Получаем количество записей в базе
-                int databaseCount = GetDatabaseCount();
+                int databaseCount = await GetDatabaseCountAsync();
 
                 // Отправляем количество записей в чат бота
                 await botClient.SendTextMessageAsync(
-                    chatId: "-1002004508817", // Замените на ваш ID чата или имя бота
+                    chatId: "-1002132656981", // Замените на ваш ID чата или имя бота
                     text: $"Количество записей в базе: {databaseCount}"
                 );
 
-                // Ожидаем один час перед следующей отправкой
+                // Ожидаем одну час перед следующей отправкой
                 await Task.Delay(TimeSpan.FromHours(1));
             }
         }
 
-        private static int GetDatabaseCount()
+        private static async Task<int> GetDatabaseCountAsync()
         {
             try
             {
                 _connection.Open();
 
-                using (MySqlCommand cmd = new MySqlCommand("SELECT COUNT(*) FROM История_сообщений", _connection))
+                using (MySqlCommand cmd = new MySqlCommand("SELECT COUNT(*) FROM Сообщения", _connection))
                 {
-                    return Convert.ToInt32(cmd.ExecuteScalar());
+                    return Convert.ToInt32(await cmd.ExecuteScalarAsync());
                 }
             }
             finally
